@@ -47,11 +47,10 @@ public class TokenValidationFilter extends OncePerRequestFilter {
                 } else {
                     List<String> authorities = jwt.getClaim("authorities");
                     UserDetails userDetails;
-                    if (authorities == null) {
+                    if (authorities == null)
                         userDetails = User.withUsername(username).password("").build();
-                    } else {
+                    else
                         userDetails = User.withUsername(username).authorities(authorities.toArray(new String[0])).password("").build();
-                    }
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }

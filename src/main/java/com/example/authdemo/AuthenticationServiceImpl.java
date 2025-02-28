@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthenticationServiceImpl implements AuthenticationService {
 
+    private final UserMapper userMapper;
     private final JWTService jwtService;
     private final UserRepository userRepository;
     private final AuthenticationManager authenticationManager;
@@ -29,7 +30,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         if (userEntity == null) {
             throw new RuntimeException("User not found after authentication");
         }
-        UserDTO userDTO = UserDTO.builder().username(userEntity.getUsername()).email(userEntity.getEmail()).build();
+        UserDTO userDTO = userMapper.toDTO(userEntity);
         return AuthenticationResponse.builder()
                 .user(userDTO)
                 .accessToken(accessToken)

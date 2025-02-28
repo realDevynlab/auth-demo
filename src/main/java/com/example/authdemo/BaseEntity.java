@@ -29,13 +29,13 @@ public abstract class BaseEntity implements Serializable {
 	protected UUID id;
 
 	@CreatedBy
-	protected String createdBy;
+	protected UUID createdBy;
 
 	@CreatedDate
 	protected LocalDateTime createdAt;
 
 	@LastModifiedBy
-	protected String updatedBy;
+	protected UUID updatedBy;
 
 	@LastModifiedDate
 	protected LocalDateTime updatedAt;

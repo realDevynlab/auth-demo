@@ -1,9 +1,11 @@
 package com.example.authdemo;
 
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
@@ -12,56 +14,70 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class JWTService {
 
+    @Value("${jwt.issuer}")
+    private String jwtIssuer;
+
+    @Value("${jwt.audience}")
+    private String jwtAudience;
+
     @Value("${jwt.access-expiry}")
-    long jwtAccessExpiry;
+    private long jwtAccessExpiry;
 
     @Value("${jwt.refresh-expiry}")
-    long jwtRefreshExpiry;
+    private long jwtRefreshExpiry;
 
     private final JwtEncoder jwtEncoder;
+    private final UserRepository userRepository;
+
+    @Autowired
+    public JWTService(JwtEncoder jwtEncoder, UserRepository userRepository) {
+        this.jwtEncoder = jwtEncoder;
+        this.userRepository = userRepository;
+    }
 
     public String getAccessToken(Authentication authentication) {
         Instant now = Instant.now();
         List<String> authorities = authentication.getAuthorities()
                 .stream()
                 .map(GrantedAuthority::getAuthority)
-                .toList();
-        Consumer<Map<String, Object>> claimsConsumer = claims -> {
-            claims.put("jti", UUID.randomUUID().toString());
-            claims.put("aud", "http://localhost:3000");
-            claims.put("token_type", "Access Token");
-            claims.put("authorities", authorities);
-        };
+                .collect(Collectors.toList());
+        User principal = (User) authentication.getPrincipal();
+        UserEntity userEntity = userRepository.findByUsername(principal.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found after authentication"));
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
-                .issuer("http://127.0.0.1:8080")
+                .issuer(jwtIssuer)
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtAccessExpiry, ChronoUnit.SECONDS))
                 .subject(authentication.getName())
-                .claims(claimsConsumer)
+                .claims(claims -> {
+                    claims.put("jti", UUID.randomUUID().toString());
+                    claims.put("aud", jwtAudience);
+                    claims.put("token_type", "Access Token");
+                    claims.put("authorities", authorities);
+                    claims.put("userId", userEntity.getId().toString());
+                })
                 .build();
         return jwtEncoder.encode(JwtEncoderParameters.from(jwtClaimsSet)).getTokenValue();
     }
 
     public String getRefreshToken(Authentication authentication) {
         Instant now = Instant.now();
-        Consumer<Map<String, Object>> consumer = claims -> {
-            claims.put("jti", UUID.randomUUID().toString());
-            claims.put("token_type", "Refresh Token");
-        };
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
-                .issuer("http://127.0.0.1:8080")
+                .issuer(jwtIssuer)
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtRefreshExpiry, ChronoUnit.SECONDS))
                 .subject(authentication.getName())
-                .claims(consumer)
+                .claims(claims -> {
+                    claims.put("jti", UUID.randomUUID().toString());
+                    claims.put("token_type", "Refresh Token");
+                })
                 .build();
         return jwtEncoder.encode(JwtEncoderParameters.from(jwtClaimsSet)).getTokenValue();
     }

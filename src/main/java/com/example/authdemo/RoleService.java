@@ -3,8 +3,6 @@ package com.example.authdemo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-
 @Service
 public class RoleService {
 
@@ -15,17 +13,20 @@ public class RoleService {
         this.roleRepository = roleRepository;
     }
 
-    public void createRole(RoleName roleName) {
-        RoleEntity role = new RoleEntity();
-        role.setName(roleName);
-        roleRepository.save(role);
+    public void createRole(RoleName role) {
+        if (!roleExists(role)) {
+            RoleEntity roleEntity = new RoleEntity();
+            roleEntity.setName(role);
+            roleRepository.save(roleEntity);
+        }
     }
 
     public boolean roleExists(RoleName roleName) {
         return roleRepository.findByName(roleName).isPresent();
     }
 
-    public Optional<RoleEntity> findRoleByName(String roleName) {
-        return roleRepository.findByName(RoleName.valueOf(roleName));
+    public RoleEntity findByName(RoleName role) {
+        return roleRepository.findByName(role).orElse(null);
     }
+
 }
