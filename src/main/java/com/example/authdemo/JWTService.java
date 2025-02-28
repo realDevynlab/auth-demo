@@ -34,12 +34,10 @@ public class JWTService {
     private long jwtRefreshExpiry;
 
     private final JwtEncoder jwtEncoder;
-    private final UserRepository userRepository;
 
     @Autowired
-    public JWTService(JwtEncoder jwtEncoder, UserRepository userRepository) {
+    public JWTService(JwtEncoder jwtEncoder) {
         this.jwtEncoder = jwtEncoder;
-        this.userRepository = userRepository;
     }
 
     public String getAccessToken(Authentication authentication) {
@@ -49,19 +47,16 @@ public class JWTService {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toList());
         User principal = (User) authentication.getPrincipal();
-        UserEntity userEntity = userRepository.findByUsername(principal.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found after authentication"));
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
                 .issuer(jwtIssuer)
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtAccessExpiry, ChronoUnit.SECONDS))
-                .subject(authentication.getName())
+                .subject(principal.getUsername())
                 .claims(claims -> {
                     claims.put("jti", UUID.randomUUID().toString());
                     claims.put("aud", jwtAudience);
                     claims.put("token_type", "Access Token");
                     claims.put("authorities", authorities);
-                    claims.put("userId", userEntity.getId().toString());
                 })
                 .build();
         return jwtEncoder.encode(JwtEncoderParameters.from(jwtClaimsSet)).getTokenValue();

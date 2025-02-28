@@ -8,12 +8,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
+import java.time.temporal.ChronoUnit;
 
 @Slf4j
 @Service
@@ -27,6 +27,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final JWTService jwtService;
     private final UserService userService;
     private final UserRepository userRepository;
+    private final UserDetailsService userDetailsService;
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenRepository refreshTokenRepository;
 
@@ -41,6 +42,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         if (userEntity == null) {
             throw new RuntimeException("User not found after authentication");
         }
+        RefreshToken savedRefreshToken = new RefreshToken();
+        savedRefreshToken.setToken(refreshToken);
+        savedRefreshToken.setUserId(userEntity.getId());
+        savedRefreshToken.setExpiryDate(Instant.now().plus(jwtRefreshExpiry, ChronoUnit.SECONDS));
+        refreshTokenRepository.save(savedRefreshToken);
         UserDTO userDTO = userMapper.toDTO(userEntity);
         return AuthenticationResponse.builder()
                 .user(userDTO)
@@ -50,48 +56,18 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
-    public RefreshToken createRefreshToken(UUID userId) {
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setUserId(userId);
-        refreshToken.setExpiryDate(Instant.now().plusSeconds(jwtRefreshExpiry));
-        refreshToken.setToken(UUID.randomUUID().toString());
-        refreshToken = refreshTokenRepository.save(refreshToken);
-        return refreshToken;
-    }
-
-    @Override
     public RefreshTokenResponse refreshToken(String refreshToken) {
-        return findByToken(refreshToken)
-                .map(this::verifyExpiration)
-                .map(RefreshToken::getUserId)
-                .map(userId -> userService.findById(userId)
-                        .map(user -> {
-                            Authentication authentication = new UsernamePasswordAuthenticationToken(user.getUsername(), null, user.getAuthorities());
-                            String accessToken = jwtService.getAccessToken(authentication);
-                            String newRefreshToken = jwtService.getRefreshToken(authentication);
-                            return RefreshTokenResponse.builder().accessToken(accessToken).refreshToken(newRefreshToken).build();
-                        })
-                        .orElseThrow(() -> new RuntimeException("User not found")))
-                .orElseThrow(() -> new RuntimeException(refreshToken + " Refresh token is not in database!"));
-    }
-
-    @Override
-    public Optional<RefreshToken> findByToken(String token) {
-        return refreshTokenRepository.findByToken(token);
-    }
-
-    @Override
-    public RefreshToken verifyExpiration(RefreshToken token) {
+        RefreshToken token = refreshTokenRepository.findByToken(refreshToken).orElseThrow(() -> new RuntimeException(refreshToken + " Refresh token is not in database!"));
         if (token.getExpiryDate().isBefore(Instant.now())) {
             refreshTokenRepository.delete(token);
             throw new RuntimeException(token.getToken() + " Refresh token was expired. Please make a new sign-in request");
         }
-        return token;
-    }
-
-    @Transactional
-    public void deleteByUserId(UUID userId) {
-        refreshTokenRepository.deleteByUserId(userId);
+        UserEntity userEntity = userService.findById(token.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
+        UserDetails userDetails = userDetailsService.loadUserByUsername(userEntity.getUsername());
+        Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        String accessToken = jwtService.getAccessToken(authentication);
+        String newRefreshToken = jwtService.getRefreshToken(authentication);
+        return RefreshTokenResponse.builder().accessToken(accessToken).refreshToken(newRefreshToken).build();
     }
 
 }

@@ -48,7 +48,7 @@ public class SecurityConfig {
         httpSecurity
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests((authorizeRequests) -> authorizeRequests
-                        .requestMatchers("/authentication/login", "/users/signup").permitAll()
+                        .requestMatchers("/authentication/**", "/users/signup").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(tokenValidationFilter, UsernamePasswordAuthenticationFilter.class)
                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults()));
