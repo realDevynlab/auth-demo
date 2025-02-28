@@ -37,4 +37,18 @@ public class AuthenticationController {
         return ResponseEntity.ok().body(apiResponse);
     }
 
+    @PostMapping("refresh-token")
+    public ResponseEntity<APIResponse<Map<String, RefreshTokenResponse>>> refreshToken(@RequestBody RefreshTokenRequest tokenRequest, HttpServletRequest servletRequest) {
+        RefreshTokenResponse refreshTokenResponse = authenticationService.refreshToken(tokenRequest.refreshToken());
+        APIResponse<Map<String, RefreshTokenResponse>> apiResponse = APIResponse.<Map<String, RefreshTokenResponse>>builder()
+                .status(HttpStatus.OK)
+                .statusCode(HttpStatus.OK.value())
+                .message("Token refresh successful")
+                .data(Map.of("response", refreshTokenResponse))
+                .path(servletRequest.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity.ok().body(apiResponse);
+    }
+
 }

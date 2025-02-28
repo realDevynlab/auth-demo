@@ -7,14 +7,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -24,38 +27,65 @@ import java.util.List;
 @Configuration
 public class TokenValidationFilter extends OncePerRequestFilter {
 
+    @Value("${jwt.issuer}")
+    private String jwtIssuer;
+
+    @Value("${jwt.audience}")
+    private String jwtAudience;
+
     private final JwtDecoder jwtDecoder;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Autowired
-    public TokenValidationFilter(@Lazy JwtDecoder jwtDecoder) {
+    public TokenValidationFilter(@Lazy JwtDecoder jwtDecoder, JwtBlacklistService jwtBlacklistService) {
         this.jwtDecoder = jwtDecoder;
+        this.jwtBlacklistService = jwtBlacklistService;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String authorizationHeader = request.getHeader("Authorization");
         if (StringUtils.isNotEmpty(authorizationHeader) && authorizationHeader.startsWith("Bearer ")) {
-            String token = authorizationHeader.substring(7);
+            String token = authorizationHeader.substring("Bearer ".length());
             try {
                 Jwt jwt = jwtDecoder.decode(token);
                 String username = jwt.getSubject();
                 if (username == null) {
                     log.error("JWT subject is null");
-                    UserDetails anonymousUser = User.withUsername("anonymous").password("").build();
-                    UsernamePasswordAuthenticationToken anonymousAuthentication = new UsernamePasswordAuthenticationToken(anonymousUser, null, anonymousUser.getAuthorities());
-                    SecurityContextHolder.getContext().setAuthentication(anonymousAuthentication);
-                } else {
-                    List<String> authorities = jwt.getClaim("authorities");
-                    UserDetails userDetails;
-                    if (authorities == null)
-                        userDetails = User.withUsername(username).password("").build();
-                    else
-                        userDetails = User.withUsername(username).authorities(authorities.toArray(new String[0])).password("").build();
-                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.getWriter().write("Invalid token.");
+                    return;
                 }
-            } catch (Exception e) {
+                String issuer = String.valueOf(jwt.getIssuer());
+                List<String> audiences = jwt.getClaim("aud");
+                if (!jwtIssuer.equals(issuer) || audiences == null || !audiences.contains(jwtAudience)) {
+                    log.error("JWT issuer or audience is invalid");
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.getWriter().write("Invalid token.");
+                    return;
+                }
+                String jti = jwt.getClaimAsString("jti");
+                if (jwtBlacklistService.isTokenBlacklisted(jti)) {
+                    log.error("Replayed JWT token");
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.getWriter().write("Invalid token.");
+                    return;
+                }
+                jwtBlacklistService.blacklistToken(jti);
+                List<String> authorities = jwt.getClaim("authorities");
+                UserDetails userDetails;
+                if (authorities == null) {
+                    userDetails = User.withUsername(username).password("").build();
+                } else {
+                    userDetails = User.withUsername(username).authorities(authorities.toArray(new String[0])).password("").build();
+                }
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            } catch (JwtException e) {
                 log.error("Invalid JWT token: {}", e.getMessage());
+                response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                response.getWriter().write("Invalid token.");
+                return;
             }
         }
         filterChain.doFilter(request, response);
