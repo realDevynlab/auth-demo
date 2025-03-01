@@ -2,7 +2,7 @@ package com.example.authdemo;
 
 import org.mapstruct.Mapper;
 
-@Mapper(componentModel = "spring")
+@Mapper
 public interface UserMapper {
 
 	UserEntity toEntity(SignupDTO signupDTO);

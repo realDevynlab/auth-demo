@@ -23,8 +23,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Value("${jwt.refresh-expiry}")
     private long jwtRefreshExpiry;
 
-    private final UserMapper userMapper;
     private final JWTService jwtService;
+    private final UserMapper userMapper;
     private final UserService userService;
     private final UserRepository userRepository;
     private final UserDetailsService userDetailsService;
