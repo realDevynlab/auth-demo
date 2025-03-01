@@ -9,6 +9,8 @@ public interface UserService {
 
     Optional<UserEntity> findById(UUID id);
 
+    Optional<UserEntity> findByUsername(String username);
+
     void createUser(UserEntity user);
 
     boolean userExists(String username);

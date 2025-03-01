@@ -34,12 +34,10 @@ public class TokenValidationFilter extends OncePerRequestFilter {
     private String jwtAudience;
 
     private final JwtDecoder jwtDecoder;
-    private final JwtBlacklistService jwtBlacklistService;
 
     @Autowired
-    public TokenValidationFilter(@Lazy JwtDecoder jwtDecoder, JwtBlacklistService jwtBlacklistService) {
+    public TokenValidationFilter(@Lazy JwtDecoder jwtDecoder) {
         this.jwtDecoder = jwtDecoder;
-        this.jwtBlacklistService = jwtBlacklistService;
     }
 
     @Override
@@ -50,28 +48,20 @@ public class TokenValidationFilter extends OncePerRequestFilter {
             try {
                 Jwt jwt = jwtDecoder.decode(token);
                 String username = jwt.getSubject();
+                String issuer = String.valueOf(jwt.getIssuer());
+                List<String> audiences = jwt.getClaim("aud");
                 if (username == null) {
                     log.error("JWT subject is null");
                     response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                    response.getWriter().write("Invalid token.");
+                    response.getWriter().write("Invalid token: subject is missing.");
                     return;
                 }
-                String issuer = String.valueOf(jwt.getIssuer());
-                List<String> audiences = jwt.getClaim("aud");
                 if (!jwtIssuer.equals(issuer) || audiences == null || !audiences.contains(jwtAudience)) {
                     log.error("JWT issuer or audience is invalid");
                     response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                    response.getWriter().write("Invalid token.");
+                    response.getWriter().write("Invalid token: issuer or audience mismatch.");
                     return;
                 }
-                String jti = jwt.getClaimAsString("jti");
-                if (jwtBlacklistService.isTokenBlacklisted(jti)) {
-                    log.error("Replayed JWT token");
-                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                    response.getWriter().write("Invalid token.");
-                    return;
-                }
-                jwtBlacklistService.blacklistToken(jti);
                 List<String> authorities = jwt.getClaim("authorities");
                 UserDetails userDetails;
                 if (authorities == null) {

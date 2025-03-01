@@ -3,6 +3,7 @@ package com.example.authdemo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -34,10 +36,14 @@ public class JWTService {
     private long jwtRefreshExpiry;
 
     private final JwtEncoder jwtEncoder;
+    private final UserRepository userRepository;
+    private final StringRedisTemplate redisTemplate;
 
     @Autowired
-    public JWTService(JwtEncoder jwtEncoder) {
+    public JWTService(JwtEncoder jwtEncoder, UserRepository userRepository, StringRedisTemplate redisTemplate) {
         this.jwtEncoder = jwtEncoder;
+        this.userRepository = userRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     public String getAccessToken(Authentication authentication) {
@@ -64,17 +70,23 @@ public class JWTService {
 
     public String getRefreshToken(Authentication authentication) {
         Instant now = Instant.now();
+        String jti = UUID.randomUUID().toString();
+        User principal = (User) authentication.getPrincipal();
+        UserEntity userEntity = userRepository.findByUsername(principal.getUsername()).orElseThrow(() -> new RuntimeException("User not found after authentication"));
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
                 .issuer(jwtIssuer)
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtRefreshExpiry, ChronoUnit.SECONDS))
                 .subject(authentication.getName())
                 .claims(claims -> {
-                    claims.put("jti", UUID.randomUUID().toString());
+                    claims.put("jti", jti);
                     claims.put("token_type", "Refresh Token");
                 })
                 .build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(jwtClaimsSet)).getTokenValue();
+        String refreshToken = jwtEncoder.encode(JwtEncoderParameters.from(jwtClaimsSet)).getTokenValue();
+        String redisKey = "refresh_token:" + userEntity.getId().toString() + ":" + jti;
+        redisTemplate.opsForValue().set(redisKey, refreshToken, jwtRefreshExpiry, TimeUnit.SECONDS);
+        return refreshToken;
     }
 
 }
