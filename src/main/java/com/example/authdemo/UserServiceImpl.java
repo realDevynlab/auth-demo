@@ -1,12 +1,14 @@
 package com.example.authdemo;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -18,6 +20,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserDTO signup(SignupRequest signupRequest) {
+        if (userRepository.existsByUsernameOrEmail(signupRequest.username(), signupRequest.email())) {
+            throw new ConflictException("Username or Email already taken");
+        }
         UserEntity userEntity = userMapper.toEntity(signupRequest);
         String encodedPassword = passwordEncoder.encode(userEntity.getPassword());
         userEntity.setPassword(encodedPassword);

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,13 +34,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     public AuthenticationResponse login(LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.usernameOrEmail(), loginRequest.password()));
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.usernameOrEmail(), loginRequest.password()));
+        } catch (BadCredentialsException e) {
+            throw new BadCredentialsException(e.getMessage());
+        }
         SecurityContextHolder.getContext().setAuthentication(authentication);
         User principal = (User) authentication.getPrincipal();
-        UserEntity userEntity = userRepository.findByUsername(principal.getUsername()).orElse(null);
-        if (userEntity == null) {
-            throw new RuntimeException("User not found after authentication");
-        }
+        UserEntity userEntity = userRepository.findByUsername(principal.getUsername()).orElseThrow();
         Set<String> keys = redisTemplate.keys("refresh_token:" + userEntity.getId().toString() + ":*");
         if (!keys.isEmpty()) {
             redisTemplate.delete(keys);
