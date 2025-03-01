@@ -24,8 +24,8 @@ public class AuthenticationController {
     }
 
     @PostMapping("login")
-    public ResponseEntity<APIResponse<Map<String, AuthenticationResponse>>> login(@RequestBody LoginDTO loginDTO, HttpServletRequest request) {
-        AuthenticationResponse authenticationResponse = authenticationService.login(loginDTO);
+    public ResponseEntity<APIResponse<Map<String, AuthenticationResponse>>> login(@RequestBody LoginRequest loginRequest, HttpServletRequest request) {
+        AuthenticationResponse authenticationResponse = authenticationService.login(loginRequest);
         APIResponse<Map<String, AuthenticationResponse>> apiResponse = APIResponse.<Map<String, AuthenticationResponse>>builder()
                 .status(HttpStatus.OK)
                 .statusCode(HttpStatus.OK.value())

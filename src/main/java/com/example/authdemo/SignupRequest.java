@@ -1,6 +1,6 @@
 package com.example.authdemo;
 
-public record SignupDTO(
+public record SignupRequest(
         String username,
         String email,
         String password

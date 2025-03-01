@@ -22,8 +22,8 @@ public class UserController {
     }
 
     @PostMapping("signup")
-    public ResponseEntity<APIResponse<Map<String, UserDTO>>> signup(@Valid @RequestBody SignupDTO signupDTO, HttpServletRequest request) {
-        UserDTO userDTO = userService.signup(signupDTO);
+    public ResponseEntity<APIResponse<Map<String, UserDTO>>> signup(@Valid @RequestBody SignupRequest signupRequest, HttpServletRequest request) {
+        UserDTO userDTO = userService.signup(signupRequest);
         APIResponse<Map<String, UserDTO>> apiResponse = APIResponse.<Map<String, UserDTO>>builder()
                 .status(HttpStatus.CREATED)
                 .statusCode(HttpStatus.CREATED.value())

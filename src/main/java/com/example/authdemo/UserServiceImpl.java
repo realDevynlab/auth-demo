@@ -17,8 +17,8 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    public UserDTO signup(SignupDTO signupDTO) {
-        UserEntity userEntity = userMapper.toEntity(signupDTO);
+    public UserDTO signup(SignupRequest signupRequest) {
+        UserEntity userEntity = userMapper.toEntity(signupRequest);
         String encodedPassword = passwordEncoder.encode(userEntity.getPassword());
         userEntity.setPassword(encodedPassword);
         RoleEntity defaultRole = roleService.findByName(RoleName.USER);
@@ -35,6 +35,11 @@ public class UserServiceImpl implements UserService {
     @Override
     public Optional<UserEntity> findByUsername(String username) {
         return userRepository.findByUsername(username);
+    }
+
+    @Override
+    public Optional<UserEntity> findByEmail(String email) {
+        return userRepository.findByEmail(email);
     }
 
     @Override

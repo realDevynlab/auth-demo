@@ -36,13 +36,13 @@ public class JWTService {
     private long jwtRefreshExpiry;
 
     private final JwtEncoder jwtEncoder;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final StringRedisTemplate redisTemplate;
 
     @Autowired
-    public JWTService(JwtEncoder jwtEncoder, UserRepository userRepository, StringRedisTemplate redisTemplate) {
+    public JWTService(JwtEncoder jwtEncoder, UserService userService, StringRedisTemplate redisTemplate) {
         this.jwtEncoder = jwtEncoder;
-        this.userRepository = userRepository;
+        this.userService = userService;
         this.redisTemplate = redisTemplate;
     }
 
@@ -72,7 +72,7 @@ public class JWTService {
         Instant now = Instant.now();
         String jti = UUID.randomUUID().toString();
         User principal = (User) authentication.getPrincipal();
-        UserEntity userEntity = userRepository.findByUsername(principal.getUsername()).orElseThrow(() -> new RuntimeException("User not found after authentication"));
+        UserEntity userEntity = userService.findByUsername(principal.getUsername()).orElseThrow(() -> new RuntimeException("User not found after authentication"));
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
                 .issuer(jwtIssuer)
                 .issuedAt(now)

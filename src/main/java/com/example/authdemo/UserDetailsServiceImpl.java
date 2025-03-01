@@ -17,17 +17,17 @@ import java.util.stream.Collectors;
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    private final UserRepository userRepository;
+    private final UserService userService;
 
     @Autowired
-    public UserDetailsServiceImpl(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    public UserDetailsServiceImpl(UserService userService) {
+        this.userService = userService;
     }
 
     @Override
     public UserDetails loadUserByUsername(String usernameOrEmail) throws UsernameNotFoundException {
-        UserEntity userEntity = userRepository.findByUsername(usernameOrEmail)
-                .or(() -> userRepository.findByEmail(usernameOrEmail))
+        UserEntity userEntity = userService.findByUsername(usernameOrEmail)
+                .or(() -> userService.findByEmail(usernameOrEmail))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         Set<GrantedAuthority> authorities = userEntity.getRoles()
                 .stream()
