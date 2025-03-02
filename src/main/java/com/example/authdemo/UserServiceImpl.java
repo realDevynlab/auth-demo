@@ -2,11 +2,10 @@ package com.example.authdemo;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
-import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -19,32 +18,24 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
+    @Transactional
     public UserDTO signup(SignupRequest signupRequest) {
-        if (userRepository.existsByUsernameOrEmail(signupRequest.username(), signupRequest.email())) {
-            throw new ConflictException("Username or Email already taken");
+        try {
+            UserEntity userEntity = userMapper.toEntity(signupRequest);
+            String encodedPassword = passwordEncoder.encode(userEntity.getPassword());
+            userEntity.setPassword(encodedPassword);
+            RoleEntity defaultRole = roleService.findByName(RoleName.USER);
+            userEntity.addRole(defaultRole);
+            userEntity = userRepository.save(userEntity);
+            return userMapper.toDTO(userEntity);
+        } catch (DataIntegrityViolationException e) {
+            throw new DataIntegrityViolationException("Username or Email already taken.");
         }
-        UserEntity userEntity = userMapper.toEntity(signupRequest);
-        String encodedPassword = passwordEncoder.encode(userEntity.getPassword());
-        userEntity.setPassword(encodedPassword);
-        RoleEntity defaultRole = roleService.findByName(RoleName.USER);
-        userEntity.addRole(defaultRole);
-        userEntity = userRepository.save(userEntity);
-        return userMapper.toDTO(userEntity);
     }
 
     @Override
-    public Optional<UserEntity> findById(UUID id) {
-        return userRepository.findById(id);
-    }
-
-    @Override
-    public Optional<UserEntity> findByUsername(String username) {
-        return userRepository.findByUsername(username);
-    }
-
-    @Override
-    public Optional<UserEntity> findByEmail(String email) {
-        return userRepository.findByEmail(email);
+    public UserEntity findByUsername(String username) {
+        return userRepository.findByUsername(username).orElseThrow(() -> new NotFoundException("User not found"));
     }
 
     @Override

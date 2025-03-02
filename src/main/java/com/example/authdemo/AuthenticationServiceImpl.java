@@ -26,7 +26,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final JwtDecoder jwtDecoder;
     private final JWTService jwtService;
     private final UserService userService;
-    private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
     private final UserDetailsService userDetailsService;
     private final AuthenticationMapper authenticationMapper;
@@ -34,27 +33,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     public AuthenticationResponse login(LoginRequest loginRequest) {
-        Authentication authentication;
         try {
-            authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.usernameOrEmail(), loginRequest.password()));
+            Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.usernameOrEmail(), loginRequest.password()));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            User principal = (User) authentication.getPrincipal();
+            UserEntity userEntity = userService.findByUsername(principal.getUsername());
+            Set<String> keys = redisTemplate.keys("refresh_token:" + userEntity.getId().toString() + ":*");
+            if (!keys.isEmpty()) redisTemplate.delete(keys);
+            String accessToken = jwtService.getAccessToken(authentication);
+            String refreshToken = jwtService.getRefreshToken(authentication);
+            UserDTO userDTO = authenticationMapper.toDTO(userEntity);
+            return AuthenticationResponse.builder().user(userDTO).accessToken(accessToken).refreshToken(refreshToken).build();
         } catch (BadCredentialsException e) {
-            throw new BadCredentialsException(e.getMessage());
+            throw new UnauthorizedException(e.getMessage());
         }
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        User principal = (User) authentication.getPrincipal();
-        UserEntity userEntity = userRepository.findByUsername(principal.getUsername()).orElseThrow();
-        Set<String> keys = redisTemplate.keys("refresh_token:" + userEntity.getId().toString() + ":*");
-        if (!keys.isEmpty()) {
-            redisTemplate.delete(keys);
-        }
-        String accessToken = jwtService.getAccessToken(authentication);
-        String refreshToken = jwtService.getRefreshToken(authentication);
-        UserDTO userDTO = authenticationMapper.toDTO(userEntity);
-        return AuthenticationResponse.builder()
-                .user(userDTO)
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .build();
     }
 
     @Override
@@ -63,20 +55,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             Jwt refreshTokenJwt = jwtDecoder.decode(refreshToken);
             String jti = refreshTokenJwt.getClaimAsString("jti");
             String username = refreshTokenJwt.getSubject();
-            UserEntity userEntity = userService.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
+            UserEntity userEntity = userService.findByUsername(username);
             String redisKey = "refresh_token:" + userEntity.getId().toString() + ":" + jti;
-            if (redisTemplate.hasKey(redisKey)) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(userEntity.getUsername());
-                Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                String accessToken = jwtService.getAccessToken(authentication);
-                String newRefreshToken = jwtService.getRefreshToken(authentication);
-                redisTemplate.delete(redisKey);
-                return RefreshTokenResponse.builder().accessToken(accessToken).refreshToken(newRefreshToken).build();
-            } else {
-                throw new RuntimeException("Refresh token has been revoked or used.");
-            }
+            if (!redisTemplate.hasKey(redisKey)) throw new JwtException("Refresh token has been revoked or used.");
+            UserDetails userDetails = userDetailsService.loadUserByUsername(userEntity.getUsername());
+            Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+            String accessToken = jwtService.getAccessToken(authentication);
+            String newRefreshToken = jwtService.getRefreshToken(authentication);
+            redisTemplate.delete(redisKey);
+            return RefreshTokenResponse.builder().accessToken(accessToken).refreshToken(newRefreshToken).build();
         } catch (JwtException e) {
-            throw new RuntimeException("Invalid refresh token.");
+            throw new UnauthorizedException("Invalid refresh token.");
         }
     }
 

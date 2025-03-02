@@ -72,7 +72,7 @@ public class JWTService {
         Instant now = Instant.now();
         String jti = UUID.randomUUID().toString();
         User principal = (User) authentication.getPrincipal();
-        UserEntity userEntity = userService.findByUsername(principal.getUsername()).orElseThrow(() -> new RuntimeException("User not found after authentication"));
+        UserEntity userEntity = userService.findByUsername(principal.getUsername());
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
                 .issuer(jwtIssuer)
                 .issuedAt(now)
