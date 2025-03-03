@@ -56,7 +56,7 @@ public class TokenValidationFilter extends OncePerRequestFilter {
                 } else {
                     String issuer = String.valueOf(jwt.getIssuer());
                     List<String> audiences = jwt.getClaim("aud");
-                    List<String> authorities = jwt.getClaim("authorities");
+                    List<String> authorities = jwt.getClaim("scope");
                     if (!jwtIssuer.equals(issuer) || audiences == null || !audiences.contains(jwtAudience)) {
                         log.error("JWT issuer or audience is invalid");
                         handleInvalidToken(response, request.getRequestURI(), "JWT issuer or audience is invalid");

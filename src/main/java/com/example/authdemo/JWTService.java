@@ -62,7 +62,7 @@ public class JWTService {
                     claims.put("jti", UUID.randomUUID().toString());
                     claims.put("aud", jwtAudience);
                     claims.put("token_type", "Access Token");
-                    claims.put("authorities", authorities);
+                    claims.put("scope", authorities);
                 })
                 .build();
         return jwtEncoder.encode(JwtEncoderParameters.from(jwtClaimsSet)).getTokenValue();
